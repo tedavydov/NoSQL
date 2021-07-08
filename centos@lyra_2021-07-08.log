@@ -1,0 +1,845 @@
+Teymuraz Davydov
+
+5	lyra	http://89.208.231.89
+
+
+http://89.208.231.89/#/home/centos/work
+
+
+
+
+
+
+=============================================================================================================================================================
+источники информации :
+=============================================================================================================================================================
+
+куки
+
+https://pythonru.com/uroki/11-rabota-s-formami-vo-flask
+
+https://pythonru.com/uroki/12-kuki-vo-flask
+
+сессии
+
+https://pythonru.com/uroki/13-sessii-vo-flask
+
+секретный ключ не установлен в сеансе flask
+https://askdev.ru/q/sekretnyy-klyuch-ne-ustanovlen-v-seanse-flask-54104/
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+=============================================================================================================================================================
+=============================================================================================================================================================
+=============================================================================================================================================================
+код приложения :
+
+ad.py
+=============================================================================================================================================================
+
+import redis
+from redis.sentinel import Sentinel
+from flask import Flask, session, request, make_response
+from time import strftime
+import uuid
+
+app = Flask(__name__)
+app.secret_key = 'super secret key'
+app.config['SESSION_TYPE'] = 'filesystem'
+
+sentinel = Sentinel([('localhost', 16379)], socket_timeout=0.1)
+master = sentinel.master_for('THEAD_CLUSTER', socket_timeout=0.1)
+
+@app.route('/')
+def theanswer():
+    day = strftime("%Y-%m-%d")
+    # чтение данных сессии
+    get_id = session.get('user_id')
+    total_visits = session.get('visits')
+    if not get_id:  # новый польователь и сессия
+        get_id = str(uuid.uuid4())
+    idx_key = 'page:index:counter:' + get_id + ':' + day
+    master.incr(idx_key)
+    # обновление данных сессии
+    visits = master.get(idx_key)
+    session['visits'] = visits
+    session['user_id'] = get_id
+    return f'user({get_id}) <br> index({idx_key}) <br><br> counter = {visits}'
+   
+=============================================================================================================================================================
+=============================================================================================================================================================
+=============================================================================================================================================================
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+cd thead
+
+=================
+=================
+mkdir redis1
+cd redis1
+touch redis.conf
+cd ..
+=================
+redis1/redis.conf
+=================
+
+bind 127.0.0.1
+port 6379
+
+=================
+=================
+
+
+
+=================
+=================
+mkdir redis2
+cd redis2
+touch redis.conf
+cd ..
+=================
+redis2/redis.conf
+=================
+
+bind 127.0.0.1
+port 6380
+slaveof 127.0.0.1 6379
+
+=================
+=================
+
+
+
+sentinel
+=================
+=================
+mkdir sentinel
+cd sentinel
+touch sentinel.conf
+cd ..
+=================
+sentinel/sentinel.conf
+=================
+
+bind 127.0.0.1
+port 16379
+
+sentinel monitor THEAD_CLUSTER 127.0.0.1 6379 1
+
+=================
+=================
+
+
+
+
+[centos@lyra thead]$ mkdir redis1
+[centos@lyra thead]$ cd redis1
+[centos@lyra redis1]$ touch redis.conf
+[centos@lyra redis1]$ cd ..
+[centos@lyra thead]$ mkdir redis2
+[centos@lyra thead]$ cd redis2
+[centos@lyra redis2]$ touch redis.conf
+[centos@lyra redis2]$ cd ..
+[centos@lyra thead]$ mkdir sentinel
+[centos@lyra thead]$ cd sentinel
+[centos@lyra sentinel]$ touch sentinel.conf
+[centos@lyra sentinel]$ cd ..
+[centos@lyra thead]$ 
+
+
+
+
+
+
+=============================================================================================================================================================
+Запустим систему в 4х терминалах
+=============================================================================================================================================================
+Первый терминал Redis
+
+cd thead
+cd redis1
+
+cd thead/redis1
+
+redis-server redis.conf
+
+=============================================================================================================================================================
+Второй терминал Redis
+
+cd thead
+cd redis2
+
+cd thead/redis2
+
+redis-server redis.conf
+
+=============================================================================================================================================================
+Третий терминал Redis Sentinel
+
+cd thead
+cd sentinel
+
+cd thead/sentinel
+
+redis-sentinel sentinel.conf
+
+=============================================================================================================================================================
+Веб приложение
+
+export FLASK_APP=ad.py
+export FLASK_ENV=development
+
+cd thead
+
+flask run --host 0.0.0.0
+
+=============================================================================================================================================================
+
+Перейдем на страницу 127.0.0.1:5000
+
+Выключим Redis1 в терминале нажав Ctrl-C
+
+Перейдем на страницу ещё раз 127.0.0.1:5000
+
+Может возникнуть ошибка - это значит Sentinel еще не переключил на запасной Redis
+
+Обновим
+
+Включим Redis1
+
+================================================================================
+
+Проверим, что счётчи? везде одинаковый
+
+redis-cli
+KEYS page:index:counter:*
+
+GET page:index:counter:<Подставить дату>
+
+redis-cli -p 6380
+KEYS page:index:counter:*
+
+GET page:index:counter:<Подставить дату>
+
+Командой GET имя ключа получим и сравним значения счётчи?ов
+
+=============================================================================================================================================================
+=============================================================================================================================================================
+
+redis-cli
+KEYS page:index:counter:*
+
+GET page:index:counter:<Подставить дату>
+
+redis-cli -p 6380
+KEYS page:index:counter:*
+
+GET page:index:counter:<Подставить дату>
+
+=============================================================================================================================================================
+=============================================================================================================================================================
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+=============================================================================================================================================================
+терминал 1 :
+=============================================================================================================================================================
+
+[centos@lyra thead]$ cd redis1
+
+
+[centos@lyra redis1]$ redis-server redis.conf
+40788:C 09 Jul 2021 00:01:49.246 # oO0OoO0OoO0Oo Redis is starting oO0OoO0OoO0Oo
+40788:C 09 Jul 2021 00:01:49.246 # Redis version=5.0.3, bits=64, commit=00000000, modified=0, pid=40788, just started
+40788:C 09 Jul 2021 00:01:49.247 # Configuration loaded
+                _._                                                  
+           _.-``__ ''-._                                             
+      _.-``    `.  `_.  ''-._           Redis 5.0.3 (00000000/0) 64 bit
+  .-`` .-```.  ```\/    _.,_ ''-._                                   
+ (    '      ,       .-`  | `,    )     Running in standalone mode
+ |`-._`-...-` __...-.``-._|'` _.-'|     Port: 6379
+ |    `-._   `._    /     _.-'    |     PID: 40788
+  `-._    `-._  `-./  _.-'    _.-'                                   
+ |`-._`-._    `-.__.-'    _.-'_.-'|                                  
+ |    `-._`-._        _.-'_.-'    |           http://redis.io        
+  `-._    `-._`-.__.-'_.-'    _.-'                                   
+ |`-._`-._    `-.__.-'    _.-'_.-'|                                  
+ |    `-._`-._        _.-'_.-'    |                                  
+  `-._    `-._`-.__.-'_.-'    _.-'                                   
+      `-._    `-.__.-'    _.-'                                       
+          `-._        _.-'                                           
+              `-.__.-'                                               
+
+40788:M 09 Jul 2021 00:01:49.251 # WARNING: The TCP backlog setting of 511 cannot be enforced because /proc/sys/net/core/somaxconn is set to the lower value of 128.
+40788:M 09 Jul 2021 00:01:49.252 # Server initialized
+40788:M 09 Jul 2021 00:01:49.252 # WARNING overcommit_memory is set to 0! Background save may fail under low memory condition. To fix this issue add 'vm.overcommit_memory = 1' to /etc/sysctl.conf and then reboot or run the command 'sysctl vm.overcommit_memory=1' for this to take effect.
+40788:M 09 Jul 2021 00:01:49.252 # WARNING you have Transparent Huge Pages (THP) support enabled in your kernel. This will create latency and memory usage issues with Redis. To fix this issue run the command 'echo never > /sys/kernel/mm/transparent_hugepage/enabled' as root, and add it to your /etc/rc.local in order to retain the setting after a reboot. Redis must be restarted after THP is disabled.
+40788:M 09 Jul 2021 00:01:49.252 * Ready to accept connections
+40788:M 09 Jul 2021 00:01:53.718 * Replica 127.0.0.1:6380 asks for synchronization
+40788:M 09 Jul 2021 00:01:53.718 * Full resync requested by replica 127.0.0.1:6380
+40788:M 09 Jul 2021 00:01:53.718 * Starting BGSAVE for SYNC with target: disk
+40788:M 09 Jul 2021 00:01:53.722 * Background saving started by pid 40796
+40796:C 09 Jul 2021 00:01:53.728 * DB saved on disk
+40796:C 09 Jul 2021 00:01:53.729 * RDB: 4 MB of memory used by copy-on-write
+40788:M 09 Jul 2021 00:01:53.765 * Background saving terminated with success
+40788:M 09 Jul 2021 00:01:53.767 * Synchronization with replica 127.0.0.1:6380 succeeded
+
+
+^C40788:signal-handler (1625779918) Received SIGINT scheduling shutdown...
+40788:M 09 Jul 2021 00:31:58.331 # User requested shutdown...
+40788:M 09 Jul 2021 00:31:58.331 # Redis is now ready to exit, bye bye...
+
+
+
+[centos@lyra redis1]$ redis-server redis.conf
+
+40902:C 09 Jul 2021 00:42:32.463 # oO0OoO0OoO0Oo Redis is starting oO0OoO0OoO0Oo
+40902:C 09 Jul 2021 00:42:32.463 # Redis version=5.0.3, bits=64, commit=00000000, modified=0, pid=40902, just started
+40902:C 09 Jul 2021 00:42:32.464 # Configuration loaded
+                _._                                                  
+           _.-``__ ''-._                                             
+      _.-``    `.  `_.  ''-._           Redis 5.0.3 (00000000/0) 64 bit
+  .-`` .-```.  ```\/    _.,_ ''-._                                   
+ (    '      ,       .-`  | `,    )     Running in standalone mode
+ |`-._`-...-` __...-.``-._|'` _.-'|     Port: 6379
+ |    `-._   `._    /     _.-'    |     PID: 40902
+  `-._    `-._  `-./  _.-'    _.-'                                   
+ |`-._`-._    `-.__.-'    _.-'_.-'|                                  
+ |    `-._`-._        _.-'_.-'    |           http://redis.io        
+  `-._    `-._`-.__.-'_.-'    _.-'                                   
+ |`-._`-._    `-.__.-'    _.-'_.-'|                                  
+ |    `-._`-._        _.-'_.-'    |                                  
+  `-._    `-._`-.__.-'_.-'    _.-'                                   
+      `-._    `-.__.-'    _.-'                                       
+          `-._        _.-'                                           
+              `-.__.-'                                               
+
+40902:M 09 Jul 2021 00:42:32.469 # WARNING: The TCP backlog setting of 511 cannot be enforced because /proc/sys/net/core/somaxconn is set to the lower value of 128.
+40902:M 09 Jul 2021 00:42:32.469 # Server initialized
+40902:M 09 Jul 2021 00:42:32.469 # WARNING overcommit_memory is set to 0! Background save may fail under low memory condition. To fix this issue add 'vm.overcommit_memory = 1' to /etc/sysctl.conf and then reboot or run the command 'sysctl vm.overcommit_memory=1' for this to take effect.
+40902:M 09 Jul 2021 00:42:32.469 # WARNING you have Transparent Huge Pages (THP) support enabled in your kernel. This will create latency and memory usage issues with Redis. To fix this issue run the command 'echo never > /sys/kernel/mm/transparent_hugepage/enabled' as root, and add it to your /etc/rc.local in order to retain the setting after a reboot. Redis must be restarted after THP is disabled.
+40902:M 09 Jul 2021 00:42:32.469 * DB loaded from disk: 0.000 seconds
+40902:M 09 Jul 2021 00:42:32.469 * Ready to accept connections
+40902:S 09 Jul 2021 00:42:43.035 * Before turning into a replica, using my master parameters to synthesize a cached master: I may be able to synchronize with the new master with just a partial transfer.
+40902:S 09 Jul 2021 00:42:43.035 * REPLICAOF 127.0.0.1:6380 enabled (user request from 'id=3 addr=127.0.0.1:50055 fd=7 name=sentinel-b2919efb-cmd age=10 idle=0 flags=x db=0 sub=0 psub=0 multi=3 qbuf=148 qbuf-free=32620 obl=36 oll=0 omem=0 events=r cmd=exec')
+40902:S 09 Jul 2021 00:42:43.036 # CONFIG REWRITE executed with success.
+40902:S 09 Jul 2021 00:42:43.499 * Connecting to MASTER 127.0.0.1:6380
+40902:S 09 Jul 2021 00:42:43.500 * MASTER <-> REPLICA sync started
+40902:S 09 Jul 2021 00:42:43.500 * Non blocking connect for SYNC fired the event.
+40902:S 09 Jul 2021 00:42:43.500 * Master replied to PING, replication can continue...
+40902:S 09 Jul 2021 00:42:43.500 * Trying a partial resynchronization (request 7b38c208d66addaac1aa13ce8b0e8378ac8f01ab:1).
+40902:S 09 Jul 2021 00:42:43.503 * Full resync from master: b4c789b448662c4294f86a94ecac1e0d32078d1b:166630
+40902:S 09 Jul 2021 00:42:43.503 * Discarding previously cached master state.
+
+40902:S 09 Jul 2021 00:42:43.537 * MASTER <-> REPLICA sync: receiving 396 bytes from master
+40902:S 09 Jul 2021 00:42:43.537 * MASTER <-> REPLICA sync: Flushing old data
+40902:S 09 Jul 2021 00:42:43.537 * MASTER <-> REPLICA sync: Loading DB in memory
+40902:S 09 Jul 2021 00:42:43.537 * MASTER <-> REPLICA sync: Finished with success
+
+
+
+
+=============================================================================================================================================================
+терминал 2 :
+=============================================================================================================================================================
+
+[centos@lyra work]$ cd thead
+[centos@lyra thead]$ cd redis2
+
+[centos@lyra redis2]$ redis-server redis.conf
+40792:C 09 Jul 2021 00:01:53.710 # oO0OoO0OoO0Oo Redis is starting oO0OoO0OoO0Oo
+40792:C 09 Jul 2021 00:01:53.710 # Redis version=5.0.3, bits=64, commit=00000000, modified=0, pid=40792, just started
+40792:C 09 Jul 2021 00:01:53.711 # Configuration loaded
+                _._                                                  
+           _.-``__ ''-._                                             
+      _.-``    `.  `_.  ''-._           Redis 5.0.3 (00000000/0) 64 bit
+  .-`` .-```.  ```\/    _.,_ ''-._                                   
+ (    '      ,       .-`  | `,    )     Running in standalone mode
+ |`-._`-...-` __...-.``-._|'` _.-'|     Port: 6380
+ |    `-._   `._    /     _.-'    |     PID: 40792
+  `-._    `-._  `-./  _.-'    _.-'                                   
+ |`-._`-._    `-.__.-'    _.-'_.-'|                                  
+ |    `-._`-._        _.-'_.-'    |           http://redis.io        
+  `-._    `-._`-.__.-'_.-'    _.-'                                   
+ |`-._`-._    `-.__.-'    _.-'_.-'|                                  
+ |    `-._`-._        _.-'_.-'    |                                  
+  `-._    `-._`-.__.-'_.-'    _.-'                                   
+      `-._    `-.__.-'    _.-'                                       
+          `-._        _.-'                                           
+              `-.__.-'                                               
+
+40792:S 09 Jul 2021 00:01:53.715 # WARNING: The TCP backlog setting of 511 cannot be enforced because /proc/sys/net/core/somaxconn is set to the lower value of 128.
+40792:S 09 Jul 2021 00:01:53.715 # Server initialized
+40792:S 09 Jul 2021 00:01:53.715 # WARNING overcommit_memory is set to 0! Background save may fail under low memory condition. To fix this issue add 'vm.overcommit_memory = 1' to /etc/sysctl.conf and then reboot or run the command 'sysctl vm.overcommit_memory=1' for this to take effect.
+40792:S 09 Jul 2021 00:01:53.716 # WARNING you have Transparent Huge Pages (THP) support enabled in your kernel. This will create latency and memory usage issues with Redis. To fix this issue run the command 'echo never > /sys/kernel/mm/transparent_hugepage/enabled' as root, and add it to your /etc/rc.local in order to retain the setting after a reboot. Redis must be restarted after THP is disabled.
+40792:S 09 Jul 2021 00:01:53.716 * Ready to accept connections
+40792:S 09 Jul 2021 00:01:53.716 * Connecting to MASTER 127.0.0.1:6379
+40792:S 09 Jul 2021 00:01:53.717 * MASTER <-> REPLICA sync started
+40792:S 09 Jul 2021 00:01:53.717 * Non blocking connect for SYNC fired the event.
+40792:S 09 Jul 2021 00:01:53.717 * Master replied to PING, replication can continue...
+40792:S 09 Jul 2021 00:01:53.717 * Partial resynchronization not possible (no cached master)
+40792:S 09 Jul 2021 00:01:53.724 * Full resync from master: ce287ddf9fe426fb10adc8ea1d3bb66c4f67cd8c:0
+40792:S 09 Jul 2021 00:01:53.766 * MASTER <-> REPLICA sync: receiving 175 bytes from master
+40792:S 09 Jul 2021 00:01:53.766 * MASTER <-> REPLICA sync: Flushing old data
+40792:S 09 Jul 2021 00:01:53.766 * MASTER <-> REPLICA sync: Loading DB in memory
+40792:S 09 Jul 2021 00:01:53.766 * MASTER <-> REPLICA sync: Finished with success
+
+
+40792:S 09 Jul 2021 00:31:58.333 # Connection with master lost.
+40792:S 09 Jul 2021 00:31:58.333 * Caching the disconnected master state.
+40792:S 09 Jul 2021 00:31:58.835 * Connecting to MASTER 127.0.0.1:6379
+40792:S 09 Jul 2021 00:31:58.835 * MASTER <-> REPLICA sync started
+40792:S 09 Jul 2021 00:31:58.836 # Error condition on socket for SYNC: Connection refused
+40792:S 09 Jul 2021 00:31:59.838 * Connecting to MASTER 127.0.0.1:6379
+40792:S 09 Jul 2021 00:31:59.839 * MASTER <-> REPLICA sync started
+40792:S 09 Jul 2021 00:31:59.839 # Error condition on socket for SYNC: Connection refused
+40792:S 09 Jul 2021 00:32:00.842 * Connecting to MASTER 127.0.0.1:6379
+40792:S 09 Jul 2021 00:32:00.842 * MASTER <-> REPLICA sync started
+40792:S 09 Jul 2021 00:32:00.842 # Error condition on socket for SYNC: Connection refused
+40792:S 09 Jul 2021 00:32:01.846 * Connecting to MASTER 127.0.0.1:6379
+40792:S 09 Jul 2021 00:32:01.846 * MASTER <-> REPLICA sync started
+40792:S 09 Jul 2021 00:32:01.847 # Error condition on socket for SYNC: Connection refused
+40792:S 09 Jul 2021 00:32:02.849 * Connecting to MASTER 127.0.0.1:6379
+40792:S 09 Jul 2021 00:32:02.849 * MASTER <-> REPLICA sync started
+40792:S 09 Jul 2021 00:32:02.849 # Error condition on socket for SYNC: Connection refused
+40792:S 09 Jul 2021 00:32:03.851 * Connecting to MASTER 127.0.0.1:6379
+40792:S 09 Jul 2021 00:32:03.851 * MASTER <-> REPLICA sync started
+40792:S 09 Jul 2021 00:32:03.851 # Error condition on socket for SYNC: Connection refused
+40792:S 09 Jul 2021 00:32:04.852 * Connecting to MASTER 127.0.0.1:6379
+40792:S 09 Jul 2021 00:32:04.852 * MASTER <-> REPLICA sync started
+40792:S 09 Jul 2021 00:32:04.852 # Error condition on socket for SYNC: Connection refused
+40792:S 09 Jul 2021 00:32:05.855 * Connecting to MASTER 127.0.0.1:6379
+40792:S 09 Jul 2021 00:32:05.856 * MASTER <-> REPLICA sync started
+40792:S 09 Jul 2021 00:32:05.856 # Error condition on socket for SYNC: Connection refused
+40792:S 09 Jul 2021 00:32:06.859 * Connecting to MASTER 127.0.0.1:6379
+40792:S 09 Jul 2021 00:32:06.859 * MASTER <-> REPLICA sync started
+40792:S 09 Jul 2021 00:32:06.860 # Error condition on socket for SYNC: Connection refused
+40792:S 09 Jul 2021 00:32:07.862 * Connecting to MASTER 127.0.0.1:6379
+40792:S 09 Jul 2021 00:32:07.862 * MASTER <-> REPLICA sync started
+40792:S 09 Jul 2021 00:32:07.863 # Error condition on socket for SYNC: Connection refused
+40792:S 09 Jul 2021 00:32:08.864 * Connecting to MASTER 127.0.0.1:6379
+40792:S 09 Jul 2021 00:32:08.865 * MASTER <-> REPLICA sync started
+40792:S 09 Jul 2021 00:32:08.865 # Error condition on socket for SYNC: Connection refused
+40792:S 09 Jul 2021 00:32:09.869 * Connecting to MASTER 127.0.0.1:6379
+40792:S 09 Jul 2021 00:32:09.869 * MASTER <-> REPLICA sync started
+40792:S 09 Jul 2021 00:32:09.870 # Error condition on socket for SYNC: Connection refused
+40792:S 09 Jul 2021 00:32:10.872 * Connecting to MASTER 127.0.0.1:6379
+40792:S 09 Jul 2021 00:32:10.873 * MASTER <-> REPLICA sync started
+40792:S 09 Jul 2021 00:32:10.873 # Error condition on socket for SYNC: Connection refused
+40792:S 09 Jul 2021 00:32:11.876 * Connecting to MASTER 127.0.0.1:6379
+40792:S 09 Jul 2021 00:32:11.876 * MASTER <-> REPLICA sync started
+40792:S 09 Jul 2021 00:32:11.877 # Error condition on socket for SYNC: Connection refused
+40792:S 09 Jul 2021 00:32:12.880 * Connecting to MASTER 127.0.0.1:6379
+40792:S 09 Jul 2021 00:32:12.880 * MASTER <-> REPLICA sync started
+40792:S 09 Jul 2021 00:32:12.881 # Error condition on socket for SYNC: Connection refused
+40792:S 09 Jul 2021 00:32:13.882 * Connecting to MASTER 127.0.0.1:6379
+40792:S 09 Jul 2021 00:32:13.882 * MASTER <-> REPLICA sync started
+40792:S 09 Jul 2021 00:32:13.883 # Error condition on socket for SYNC: Connection refused
+40792:S 09 Jul 2021 00:32:14.885 * Connecting to MASTER 127.0.0.1:6379
+40792:S 09 Jul 2021 00:32:14.886 * MASTER <-> REPLICA sync started
+40792:S 09 Jul 2021 00:32:14.886 # Error condition on socket for SYNC: Connection refused
+40792:S 09 Jul 2021 00:32:15.889 * Connecting to MASTER 127.0.0.1:6379
+40792:S 09 Jul 2021 00:32:15.889 * MASTER <-> REPLICA sync started
+40792:S 09 Jul 2021 00:32:15.889 # Error condition on socket for SYNC: Connection refused
+40792:S 09 Jul 2021 00:32:16.891 * Connecting to MASTER 127.0.0.1:6379
+40792:S 09 Jul 2021 00:32:16.892 * MASTER <-> REPLICA sync started
+40792:S 09 Jul 2021 00:32:16.893 # Error condition on socket for SYNC: Connection refused
+40792:S 09 Jul 2021 00:32:17.895 * Connecting to MASTER 127.0.0.1:6379
+40792:S 09 Jul 2021 00:32:17.896 * MASTER <-> REPLICA sync started
+40792:S 09 Jul 2021 00:32:17.897 # Error condition on socket for SYNC: Connection refused
+40792:S 09 Jul 2021 00:32:18.900 * Connecting to MASTER 127.0.0.1:6379
+40792:S 09 Jul 2021 00:32:18.900 * MASTER <-> REPLICA sync started
+40792:S 09 Jul 2021 00:32:18.900 # Error condition on socket for SYNC: Connection refused
+40792:S 09 Jul 2021 00:32:19.907 * Connecting to MASTER 127.0.0.1:6379
+40792:S 09 Jul 2021 00:32:19.908 * MASTER <-> REPLICA sync started
+40792:S 09 Jul 2021 00:32:19.908 # Error condition on socket for SYNC: Connection refused
+40792:S 09 Jul 2021 00:32:20.910 * Connecting to MASTER 127.0.0.1:6379
+40792:S 09 Jul 2021 00:32:20.910 * MASTER <-> REPLICA sync started
+40792:S 09 Jul 2021 00:32:20.911 # Error condition on socket for SYNC: Connection refused
+40792:S 09 Jul 2021 00:32:21.912 * Connecting to MASTER 127.0.0.1:6379
+40792:S 09 Jul 2021 00:32:21.912 * MASTER <-> REPLICA sync started
+40792:S 09 Jul 2021 00:32:21.913 # Error condition on socket for SYNC: Connection refused
+40792:S 09 Jul 2021 00:32:22.916 * Connecting to MASTER 127.0.0.1:6379
+40792:S 09 Jul 2021 00:32:22.917 * MASTER <-> REPLICA sync started
+40792:S 09 Jul 2021 00:32:22.917 # Error condition on socket for SYNC: Connection refused
+40792:S 09 Jul 2021 00:32:23.920 * Connecting to MASTER 127.0.0.1:6379
+40792:S 09 Jul 2021 00:32:23.920 * MASTER <-> REPLICA sync started
+40792:S 09 Jul 2021 00:32:23.921 # Error condition on socket for SYNC: Connection refused
+40792:S 09 Jul 2021 00:32:24.924 * Connecting to MASTER 127.0.0.1:6379
+40792:S 09 Jul 2021 00:32:24.924 * MASTER <-> REPLICA sync started
+40792:S 09 Jul 2021 00:32:24.925 # Error condition on socket for SYNC: Connection refused
+40792:S 09 Jul 2021 00:32:25.928 * Connecting to MASTER 127.0.0.1:6379
+40792:S 09 Jul 2021 00:32:25.929 * MASTER <-> REPLICA sync started
+40792:S 09 Jul 2021 00:32:25.929 # Error condition on socket for SYNC: Connection refused
+40792:S 09 Jul 2021 00:32:26.931 * Connecting to MASTER 127.0.0.1:6379
+40792:S 09 Jul 2021 00:32:26.932 * MASTER <-> REPLICA sync started
+40792:S 09 Jul 2021 00:32:26.932 # Error condition on socket for SYNC: Connection refused
+40792:S 09 Jul 2021 00:32:27.934 * Connecting to MASTER 127.0.0.1:6379
+40792:S 09 Jul 2021 00:32:27.934 * MASTER <-> REPLICA sync started
+40792:S 09 Jul 2021 00:32:27.934 # Error condition on socket for SYNC: Connection refused
+40792:M 09 Jul 2021 00:32:28.574 # Setting secondary replication ID to ce287ddf9fe426fb10adc8ea1d3bb66c4f67cd8c, valid up to offset: 124974. New replication ID is b4c789b448662c4294f86a94ecac1e0d32078d1b
+40792:M 09 Jul 2021 00:32:28.574 * Discarding previously cached master state.
+40792:M 09 Jul 2021 00:32:28.574 * MASTER MODE enabled (user request from 'id=4 addr=127.0.0.1:32771 fd=8 name=sentinel-b2919efb-cmd age=1831 idle=0 flags=x db=0 sub=0 psub=0 multi=3 qbuf=140 qbuf-free=32628 obl=36 oll=0 omem=0 events=r cmd=exec')
+40792:M 09 Jul 2021 00:32:28.575 # CONFIG REWRITE executed with success.
+
+
+40792:M 09 Jul 2021 00:42:43.500 * Replica 127.0.0.1:6379 asks for synchronization
+40792:M 09 Jul 2021 00:42:43.500 * Partial resynchronization not accepted: Replication ID mismatch (Replica asked for '7b38c208d66addaac1aa13ce8b0e8378ac8f01ab', my replication IDs are 'b4c789b448662c4294f86a94ecac1e0d32078d1b' and 'ce287ddf9fe426fb10adc8ea1d3bb66c4f67cd8c')
+40792:M 09 Jul 2021 00:42:43.500 * Starting BGSAVE for SYNC with target: disk
+40792:M 09 Jul 2021 00:42:43.503 * Background saving started by pid 40906
+40906:C 09 Jul 2021 00:42:43.508 * DB saved on disk
+40906:C 09 Jul 2021 00:42:43.509 * RDB: 2 MB of memory used by copy-on-write
+40792:M 09 Jul 2021 00:42:43.537 * Background saving terminated with success
+40792:M 09 Jul 2021 00:42:43.537 * Synchronization with replica 127.0.0.1:6379 succeeded
+
+
+
+
+
+=============================================================================================================================================================
+терминал 3 :
+=============================================================================================================================================================
+
+[centos@lyra work]$ cd thead
+[centos@lyra thead]$ cd sentinel
+
+
+[centos@lyra sentinel]$ redis-sentinel sentinel.conf
+40809:X 09 Jul 2021 00:01:57.879 # oO0OoO0OoO0Oo Redis is starting oO0OoO0OoO0Oo
+40809:X 09 Jul 2021 00:01:57.879 # Redis version=5.0.3, bits=64, commit=00000000, modified=0, pid=40809, just started
+40809:X 09 Jul 2021 00:01:57.880 # Configuration loaded
+                _._                                                  
+           _.-``__ ''-._                                             
+      _.-``    `.  `_.  ''-._           Redis 5.0.3 (00000000/0) 64 bit
+  .-`` .-```.  ```\/    _.,_ ''-._                                   
+ (    '      ,       .-`  | `,    )     Running in sentinel mode
+ |`-._`-...-` __...-.``-._|'` _.-'|     Port: 16379
+ |    `-._   `._    /     _.-'    |     PID: 40809
+  `-._    `-._  `-./  _.-'    _.-'                                   
+ |`-._`-._    `-.__.-'    _.-'_.-'|                                  
+ |    `-._`-._        _.-'_.-'    |           http://redis.io        
+  `-._    `-._`-.__.-'_.-'    _.-'                                   
+ |`-._`-._    `-.__.-'    _.-'_.-'|                                  
+ |    `-._`-._        _.-'_.-'    |                                  
+  `-._    `-._`-.__.-'_.-'    _.-'                                   
+      `-._    `-.__.-'    _.-'                                       
+          `-._        _.-'                                           
+              `-.__.-'                                               
+
+40809:X 09 Jul 2021 00:01:57.892 # WARNING: The TCP backlog setting of 511 cannot be enforced because /proc/sys/net/core/somaxconn is set to the lower value of 128.
+40809:X 09 Jul 2021 00:01:57.892 # Sentinel ID is b2919efbf00909b3e264754cc6fa69436fba7e90
+40809:X 09 Jul 2021 00:01:57.892 # +monitor master THEAD_CLUSTER 127.0.0.1 6379 quorum 1
+
+
+40809:X 09 Jul 2021 00:32:28.395 # +sdown master THEAD_CLUSTER 127.0.0.1 6379
+40809:X 09 Jul 2021 00:32:28.395 # +odown master THEAD_CLUSTER 127.0.0.1 6379 #quorum 1/1
+40809:X 09 Jul 2021 00:32:28.395 # +new-epoch 1
+40809:X 09 Jul 2021 00:32:28.395 # +try-failover master THEAD_CLUSTER 127.0.0.1 6379
+40809:X 09 Jul 2021 00:32:28.400 # +vote-for-leader b2919efbf00909b3e264754cc6fa69436fba7e90 1
+40809:X 09 Jul 2021 00:32:28.400 # +elected-leader master THEAD_CLUSTER 127.0.0.1 6379
+40809:X 09 Jul 2021 00:32:28.400 # +failover-state-select-slave master THEAD_CLUSTER 127.0.0.1 6379
+40809:X 09 Jul 2021 00:32:28.491 # +selected-slave slave 127.0.0.1:6380 127.0.0.1 6380 @ THEAD_CLUSTER 127.0.0.1 6379
+40809:X 09 Jul 2021 00:32:28.491 * +failover-state-send-slaveof-noone slave 127.0.0.1:6380 127.0.0.1 6380 @ THEAD_CLUSTER 127.0.0.1 6379
+40809:X 09 Jul 2021 00:32:28.574 * +failover-state-wait-promotion slave 127.0.0.1:6380 127.0.0.1 6380 @ THEAD_CLUSTER 127.0.0.1 6379
+40809:X 09 Jul 2021 00:32:29.511 # +promoted-slave slave 127.0.0.1:6380 127.0.0.1 6380 @ THEAD_CLUSTER 127.0.0.1 6379
+40809:X 09 Jul 2021 00:32:29.511 # +failover-state-reconf-slaves master THEAD_CLUSTER 127.0.0.1 6379
+40809:X 09 Jul 2021 00:32:29.558 # +failover-end master THEAD_CLUSTER 127.0.0.1 6379
+40809:X 09 Jul 2021 00:32:29.558 # +switch-master THEAD_CLUSTER 127.0.0.1 6379 127.0.0.1 6380
+40809:X 09 Jul 2021 00:32:29.558 * +slave slave 127.0.0.1:6379 127.0.0.1 6379 @ THEAD_CLUSTER 127.0.0.1 6380
+40809:X 09 Jul 2021 00:32:59.637 # +sdown slave 127.0.0.1:6379 127.0.0.1 6379 @ THEAD_CLUSTER 127.0.0.1 6380
+
+
+40809:X 09 Jul 2021 00:42:33.013 # -sdown slave 127.0.0.1:6379 127.0.0.1 6379 @ THEAD_CLUSTER 127.0.0.1 6380
+40809:X 09 Jul 2021 00:42:43.034 * +convert-to-slave slave 127.0.0.1:6379 127.0.0.1 6379 @ THEAD_CLUSTER 127.0.0.1 6380
+
+
+
+
+=============================================================================================================================================================
+=============================================================================================================================================================
+терминал для curl :
+=============================================================================================================================================================
+
+[centos@lyra work]$ curl http://127.0.0.1:5000
+user(d56c88bc-baab-401c-9c61-e5ff937e5ab1) <br> index(page:index:counter:d56c88bc-baab-401c-9c61-e5ff937e5ab1:2021-07-09) <br><br> counter = b'1'
+
+[centos@lyra work]$ curl http://127.0.0.1:5000
+user(33256445-0d79-408e-be02-d570f63ee6e9) <br> index(page:index:counter:33256445-0d79-408e-be02-d570f63ee6e9:2021-07-09) <br><br> counter = b'1'
+
+[centos@lyra work]$ 
+
+
+=============================================================================================================================================================
+=============================================================================================================================================================
+Браузер  
+
+http://89.208.231.89:5000/
+=============================================================================================================================================================
+
+user(d4a21b6d-717a-4790-ab37-1bb582f91a20)
+index(page:index:counter:d4a21b6d-717a-4790-ab37-1bb582f91a20:2021-07-09)
+
+counter = b'4'
+
+=============================================================================================================================================================
+
+user(d4a21b6d-717a-4790-ab37-1bb582f91a20)
+index(page:index:counter:d4a21b6d-717a-4790-ab37-1bb582f91a20:2021-07-09)
+
+counter = b'5'
+
+
+=============================================================================================================================================================
+=============================================================================================================================================================
+терминал для redis-cli :
+=============================================================================================================================================================
+
+[centos@lyra work]$ redis-cli -p 6380
+
+
+127.0.0.1:6380> KEYS *
+
+1) "page:index:counter:d4a21b6d-717a-4790-ab37-1bb582f91a20:2021-07-09"
+
+
+127.0.0.1:6380> GET page:index:counter:d4a21b6d-717a-4790-ab37-1bb582f91a20:2021-07-09
+"2"
+
+127.0.0.1:6380> GET page:index:counter:d4a21b6d-717a-4790-ab37-1bb582f91a20:2021-07-09
+"2"
+
+
+127.0.0.1:6380> KEYS *
+
+1) "page:index:counter:33256445-0d79-408e-be02-d570f63ee6e9:2021-07-09"
+2) "page:index:counter:d56c88bc-baab-401c-9c61-e5ff937e5ab1:2021-07-09"
+3) "page:index:counter:d4a21b6d-717a-4790-ab37-1bb582f91a20:2021-07-09"
+
+
+127.0.0.1:6380> GET page:index:counter:d4a21b6d-717a-4790-ab37-1bb582f91a20:2021-07-09
+"2"
+
+127.0.0.1:6380> GET page:index:counter:d4a21b6d-717a-4790-ab37-1bb582f91a20:2021-07-09
+"4"
+
+=============================================================================================================================================================
+
+127.0.0.1:6380> KEYS *
+
+1) "page:index:counter:33256445-0d79-408e-be02-d570f63ee6e9:2021-07-09"
+2) "page:index:counter:d56c88bc-baab-401c-9c61-e5ff937e5ab1:2021-07-09"
+3) "page:index:counter:d4a21b6d-717a-4790-ab37-1bb582f91a20:2021-07-09"
+
+
+127.0.0.1:6380> GET page:index:counter:d4a21b6d-717a-4790-ab37-1bb582f91a20:2021-07-09
+"5"
+
+
+
+127.0.0.1:6380> 
+
+=============================================================================================================================================================
+=============================================================================================================================================================
+терминал для flask :
+=============================================================================================================================================================
+
+[centos@lyra thead]$ export FLASK_APP=ad.py
+[centos@lyra thead]$ export FLASK_ENV=development
+
+
+
+[centos@lyra thead]$ flask run --host 0.0.0.0
+
+ * Serving Flask app 'ad.py' (lazy loading)
+ * Environment: development
+ * Debug mode: on
+ * Running on all addresses.
+   WARNING: This is a development server. Do not use it in a production deployment.
+ * Running on http://89.208.231.89:5000/ (Press CTRL+C to quit)
+ * Restarting with stat
+ * Debugger is active!
+ * Debugger PIN: 924-292-655
+
+185.34.240.70 - - [09/Jul/2021 00:02:15] "GET / HTTP/1.1" 200 -
+185.34.240.70 - - [09/Jul/2021 00:02:20] "GET / HTTP/1.1" 200 -
+
+127.0.0.1 - - [09/Jul/2021 00:03:05] "GET / HTTP/1.1" 200 -
+127.0.0.1 - - [09/Jul/2021 00:03:10] "GET / HTTP/1.1" 200 -
+
+185.34.240.70 - - [09/Jul/2021 00:03:53] "GET / HTTP/1.1" 200 -
+185.34.240.70 - - [09/Jul/2021 00:03:57] "GET / HTTP/1.1" 200 -
+
+185.34.240.70 - - [09/Jul/2021 00:32:10] "GET / HTTP/1.1" 500 -
+
+Traceback (most recent call last):
+  File "/usr/local/lib/python3.6/site-packages/redis/connection.py", line 1198, in get_connection
+    if connection.can_read():
+  File "/usr/local/lib/python3.6/site-packages/redis/connection.py", line 734, in can_read
+    return self._parser.can_read(timeout)
+  File "/usr/local/lib/python3.6/site-packages/redis/connection.py", line 321, in can_read
+    return self._buffer and self._buffer.can_read(timeout)
+  File "/usr/local/lib/python3.6/site-packages/redis/connection.py", line 231, in can_read
+    raise_on_timeout=False)
+  File "/usr/local/lib/python3.6/site-packages/redis/connection.py", line 201, in _read_from_socket
+    raise ConnectionError(SERVER_CLOSED_CONNECTION_ERROR)
+
+redis.exceptions.ConnectionError: Connection closed by server.
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/usr/local/lib/python3.6/site-packages/redis/connection.py", line 559, in connect
+    sock = self._connect()
+  File "/usr/local/lib/python3.6/site-packages/redis/connection.py", line 615, in _connect
+    raise err
+  File "/usr/local/lib/python3.6/site-packages/redis/connection.py", line 603, in _connect
+    sock.connect(socket_address)
+
+ConnectionRefusedError: [Errno 111] Connection refused
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/usr/local/lib64/python3.6/site-packages/flask/app.py", line 2088, in __call__
+    return self.wsgi_app(environ, start_response)
+  File "/usr/local/lib64/python3.6/site-packages/flask/app.py", line 2073, in wsgi_app
+    response = self.handle_exception(e)
+  File "/usr/local/lib64/python3.6/site-packages/flask/app.py", line 2070, in wsgi_app
+    response = self.full_dispatch_request()
+  File "/usr/local/lib64/python3.6/site-packages/flask/app.py", line 1515, in full_dispatch_request
+    rv = self.handle_user_exception(e)
+  File "/usr/local/lib64/python3.6/site-packages/flask/app.py", line 1513, in full_dispatch_request
+    rv = self.dispatch_request()
+  File "/usr/local/lib64/python3.6/site-packages/flask/app.py", line 1499, in dispatch_request
+    return self.ensure_sync(self.view_functions[rule.endpoint])(**req.view_args)
+  File "/home/centos/work/thead/ad.py", line 23, in theanswer
+    master.incr(idx_key)
+  File "/usr/local/lib/python3.6/site-packages/redis/client.py", line 1641, in incr
+    return self.incrby(name, amount)
+  File "/usr/local/lib/python3.6/site-packages/redis/client.py", line 1650, in incrby
+    return self.execute_command('INCRBY', name, amount)
+  File "/usr/local/lib/python3.6/site-packages/redis/client.py", line 898, in execute_command
+    conn = self.connection or pool.get_connection(command_name, **options)
+  File "/usr/local/lib/python3.6/site-packages/redis/connection.py", line 1202, in get_connection
+    connection.connect()
+  File "/usr/local/lib/python3.6/site-packages/redis/sentinel.py", line 44, in connect
+    self.connect_to(self.connection_pool.get_master_address())
+  File "/usr/local/lib/python3.6/site-packages/redis/sentinel.py", line 34, in connect_to
+    super(SentinelManagedConnection, self).connect()
+  File "/usr/local/lib/python3.6/site-packages/redis/connection.py", line 563, in connect
+    raise ConnectionError(self._error_message(e))
+
+redis.exceptions.ConnectionError: Error 111 connecting to 127.0.0.1:6379. Connection refused.
+
+185.34.240.70 - - [09/Jul/2021 00:32:10] "GET /?__debugger__=yes&cmd=resource&f=style.css HTTP/1.1" 200 -
+185.34.240.70 - - [09/Jul/2021 00:32:10] "GET /?__debugger__=yes&cmd=resource&f=debugger.js HTTP/1.1" 200 -
+185.34.240.70 - - [09/Jul/2021 00:32:10] "GET /?__debugger__=yes&cmd=resource&f=console.png HTTP/1.1" 200 -
+185.34.240.70 - - [09/Jul/2021 00:32:10] "GET /?__debugger__=yes&cmd=resource&f=ubuntu.ttf HTTP/1.1" 200 -
+185.34.240.70 - - [09/Jul/2021 00:32:10] "GET /?__debugger__=yes&cmd=resource&f=console.png HTTP/1.1" 200 -
+
+185.34.240.70 - - [09/Jul/2021 00:32:13] "GET / HTTP/1.1" 500 -
+
+Traceback (most recent call last):
+  File "/usr/local/lib/python3.6/site-packages/redis/connection.py", line 559, in connect
+    sock = self._connect()
+  File "/usr/local/lib/python3.6/site-packages/redis/connection.py", line 615, in _connect
+    raise err
+  File "/usr/local/lib/python3.6/site-packages/redis/connection.py", line 603, in _connect
+    sock.connect(socket_address)
+ConnectionRefusedError: [Errno 111] Connection refused
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/usr/local/lib64/python3.6/site-packages/flask/app.py", line 2088, in __call__
+    return self.wsgi_app(environ, start_response)
+  File "/usr/local/lib64/python3.6/site-packages/flask/app.py", line 2073, in wsgi_app
+    response = self.handle_exception(e)
+  File "/usr/local/lib64/python3.6/site-packages/flask/app.py", line 2070, in wsgi_app
+    response = self.full_dispatch_request()
+  File "/usr/local/lib64/python3.6/site-packages/flask/app.py", line 1515, in full_dispatch_request
+    rv = self.handle_user_exception(e)
+  File "/usr/local/lib64/python3.6/site-packages/flask/app.py", line 1513, in full_dispatch_request
+    rv = self.dispatch_request()
+  File "/usr/local/lib64/python3.6/site-packages/flask/app.py", line 1499, in dispatch_request
+    return self.ensure_sync(self.view_functions[rule.endpoint])(**req.view_args)
+  File "/home/centos/work/thead/ad.py", line 23, in theanswer
+    master.incr(idx_key)
+  File "/usr/local/lib/python3.6/site-packages/redis/client.py", line 1641, in incr
+    return self.incrby(name, amount)
+  File "/usr/local/lib/python3.6/site-packages/redis/client.py", line 1650, in incrby
+    return self.execute_command('INCRBY', name, amount)
+  File "/usr/local/lib/python3.6/site-packages/redis/client.py", line 898, in execute_command
+    conn = self.connection or pool.get_connection(command_name, **options)
+  File "/usr/local/lib/python3.6/site-packages/redis/connection.py", line 1192, in get_connection
+    connection.connect()
+  File "/usr/local/lib/python3.6/site-packages/redis/sentinel.py", line 44, in connect
+    self.connect_to(self.connection_pool.get_master_address())
+  File "/usr/local/lib/python3.6/site-packages/redis/sentinel.py", line 34, in connect_to
+    super(SentinelManagedConnection, self).connect()
+  File "/usr/local/lib/python3.6/site-packages/redis/connection.py", line 563, in connect
+    raise ConnectionError(self._error_message(e))
+
+redis.exceptions.ConnectionError: Error 111 connecting to 127.0.0.1:6379. Connection refused.
+
+185.34.240.70 - - [09/Jul/2021 00:32:13] "GET /?__debugger__=yes&cmd=resource&f=style.css HTTP/1.1" 200 -
+185.34.240.70 - - [09/Jul/2021 00:32:13] "GET /?__debugger__=yes&cmd=resource&f=debugger.js HTTP/1.1" 200 -
+185.34.240.70 - - [09/Jul/2021 00:32:13] "GET /?__debugger__=yes&cmd=resource&f=console.png HTTP/1.1" 200 -
+185.34.240.70 - - [09/Jul/2021 00:32:13] "GET /?__debugger__=yes&cmd=resource&f=ubuntu.ttf HTTP/1.1" 200 -
+185.34.240.70 - - [09/Jul/2021 00:32:13] "GET /?__debugger__=yes&cmd=resource&f=console.png HTTP/1.1" 200 -
+185.34.240.70 - - [09/Jul/2021 00:37:48] "GET / HTTP/1.1" 200 -
+
+
+=============================================================================================================================================================
+=============================================================================================================================================================
+=============================================================================================================================================================
+=============================================================================================================================================================
+=============================================================================================================================================================
+
+
