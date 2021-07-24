@@ -61,20 +61,24 @@ def getplaces():
     lat = request.args.get('lat')
     lng = request.args.get('lng')
     dist = request.args.get('distance')
+    like_limit = request.args.get('likelimit')
     if dist is None:
         dist = 4000
+    if like_limit is None:
+        like_limit = 2
     cursor = places.find({
     "geometry": {
         "$nearSphere": {
             "$geometry": {
                 "type" : "Point",
-                "coordinates" : [ float(lng), float(lat) ]
+                "coordinates": [ float(lng), float(lat) ]
             },
             "$minDistance": 0,
-            "$maxDistance": dist, } } })
+            "$maxDistance": dist, } }, 
+    "properties.like": { "$gt": like_limit }        
+            })
     resultset = []
     for place in cursor:
         resultset.append(place)
     return json_util.dumps(resultset)
-    
-    
+
