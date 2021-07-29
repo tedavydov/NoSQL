@@ -25,6 +25,7 @@ local function newplace(request)
     place['geometry.type'] = obj['geometry']['type']
     place['geometry.coordinates'] = obj['geometry']['coordinates']
     place['properties.comment'] = obj['properties']['comment']
+    place['properties.rate'] = obj['properties']['rate']
 
     --[[
         Создаём сущность для таблицы
@@ -75,6 +76,9 @@ local function places(request)
             break
         end
 
+        -- Читаем рейтинг 
+        local rates = tonumber(place['properties.rate'])
+
         -- Создаём GeoJSON
         local obj = {
             ['_id'] = place['_id'],
@@ -88,10 +92,13 @@ local function places(request)
                 rate = place['properties.rate'],
             },
         }
-        table.insert(result, obj)
-        limit = limit - 1
-        if limit == 0 then
-            break
+        -- Если рейтинг больше 3 то запоминаем обьект 
+        if rates > 3 then
+            table.insert(result, obj)
+            limit = limit - 1
+            if limit == 0 then
+                break
+            end
         end
     end
     return {code=200,
@@ -114,6 +121,7 @@ box.space.streets:format({
         {name="geometry.type", type="string"},
         {name="geometry.coordinates", type="array"},
         {name="properties.comment", type="string"},
+        {name="properties.rate", type="integer"},
 })
 --[[ Создаём первичный индекс ]]
 box.space.streets:create_index('primary', {
