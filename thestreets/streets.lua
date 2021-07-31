@@ -25,7 +25,20 @@ local function newplace(request)
     place['geometry.type'] = obj['geometry']['type']
     place['geometry.coordinates'] = obj['geometry']['coordinates']
     place['properties.comment'] = obj['properties']['comment']
-    place['properties.rate'] = obj['properties']['rate']
+    
+    -- получаем рейтинг от пользователя
+    input_rate = tonumber(obj['properties']['rate'])
+    -- если рейтинг читается 
+    if input_rate ~= nil then
+        -- и если рейтинг выходит за допустимые границы - то зададим значения по умолчанию
+        if input_rate > 5 then
+            input_rate = 5
+        elseif input_rate < 1 then
+            input_rate = 1
+        end
+    end
+    -- сохраним в плоской структуре нашего обьекта - отзыва 
+    place['properties.rate'] = input_rate
 
     --[[
         Создаём сущность для таблицы
