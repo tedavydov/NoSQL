@@ -75,10 +75,15 @@ local function places(request)
     local x = tonumber(request:param('x'))
     local y = tonumber(request:param('y'))
     local dist = tonumber(request:param('distance'))
+    
+    -- получаем rate_min из options['rate'] в index.html ==> function getPlaces() 
+    local rate_min = tonumber(request:param('rate')) 
 
+    -- при отсутствии параметров - задаем "значения по умолчанию" 
     x = x or 1
     y = y or 1
     dist = dist or 0.2
+    rate_min = rate_min or 3
 
     --[[
         Итерируемся по таблице начиная с ближайщих к указанной точке объектов
@@ -107,8 +112,8 @@ local function places(request)
                 rate = place['properties.rate'],
             },
         }
-        -- Если рейтинг больше 3 то запоминаем обьект для показа на карте 
-        if rates > 3 then
+        -- Если рейтинг больше или равен rate_min то запоминаем обьект для показа на карте 
+        if rates >= rate_min then
             table.insert(result, obj)
             limit = limit - 1
             if limit == 0 then

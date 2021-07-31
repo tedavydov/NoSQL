@@ -92,8 +92,8 @@
         mymap.on('click', onMapClick);
 
         /*
-        * Загрузка комметариев с сервера, расположенных поблизости от текущих
-        * координат
+        * Загрузка комметариев с сервера, 
+        * расположенных поблизости от текущих координат
         */
         function getPlaces() {
             var request = {};
@@ -103,6 +103,9 @@
                 "y": p.y,
             };
 
+            /*
+            * получает 'rate' из тега <input id="rate" >
+            */
             options['rate'] = document.getElementById("rate").value;
 
             fetch("/places?" + new URLSearchParams(options))
