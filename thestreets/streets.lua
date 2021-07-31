@@ -76,8 +76,10 @@ local function places(request)
             break
         end
 
-        -- Читаем рейтинг 
+        -- Читаем рейтинг ( для обьектов в доступной зоне - прошедших предыдущую проверку ) 
         local rates = tonumber(place['properties.rate'])
+        -- если рейтинг не читается то зададим значение 1 по умолчанию 
+        rates = rates or 1
 
         -- Создаём GeoJSON
         local obj = {
@@ -92,7 +94,7 @@ local function places(request)
                 rate = place['properties.rate'],
             },
         }
-        -- Если рейтинг больше 3 то запоминаем обьект 
+        -- Если рейтинг больше 3 то запоминаем обьект для показа на карте 
         if rates > 3 then
             table.insert(result, obj)
             limit = limit - 1
