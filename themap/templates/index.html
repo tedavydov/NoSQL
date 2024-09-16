@@ -1,0 +1,105 @@
+<html>
+
+    <head>
+        <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css"crossorigin=""/>
+        <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"crossorigin=""></script>
+        <script src="https://unpkg.com/leaflet-providers@1.0.13/leaflet-providers.js"crossorigin=""></script>
+</head>
+<body>
+    <!-- Отображение карты и текущих координат -->
+    <div id="mapid" style="height:600px"></div>
+    <div id="centerid">Center:</div>
+
+    <script>
+        
+        /*
+        * Виджет карты
+        */
+        var mymap = L.map('mapid', {'tap':false}).setView([59.95184617254149, 30.30683755874634], 13);
+
+        /*
+        * Слой карты с домами, улицами и т.п.
+        */
+        var OpenStreetMap_Mapnik = 
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', 
+                        {maxZoom: 19, 
+                         attribution: '&copy; <ahref="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',}
+                       ).addTo(mymap);
+
+        /*
+        * Слой карты с комментариями
+        * Этот слой будут наполнять пользователи
+        */
+        var got = {}
+        var layer = 
+            L.geoJSON(null, {
+                "onEachFeature": function (feature, layer) 
+                {got[feature['_id']['$oid']] = true;
+                 if (feature.properties && feature.properties.comment) 
+                 {   pp = feature.properties.comment;
+                     if(feature.properties.like){pp = feature.properties.comment + " like = " + feature.properties.like};
+                     var popup = layer.bindPopup(pp);}},
+                "filter": function(feature) {
+                    /* Филтьруем элементы, которые уже были отображены на карте */
+                    return got[feature['_id']['$oid']] != true;}
+            }).addTo(mymap);
+
+        /*
+        * Диалог для комметария
+        */
+        function onMapClick(e) {
+            var response = window.prompt('What do you think about this place?', 'not bad');
+            var resplike = window.prompt('How do you rate this place?', '5');
+            if ((response != null) && (resplike != null)) {
+                var data = {
+                    "type": "Feature", "geometry": {"type": "Point", 
+                                                    "coordinates": [e.latlng['lng'], 
+                                                                    e.latlng['lat']]},
+                    "properties": {
+                        "comment": response,
+                        "like": resplike}} 
+                fetch("/newplace", {
+                    method: "POST", body: JSON.stringify(data)}
+                     ).then(function (res) {
+                    res.json().then(function (data) {
+                        layer.addData(data);})});
+            }} 
+        mymap.on('click', onMapClick);
+
+        /*
+        * Загрузка комметариев с сервера, расположенных поблизости от текущих
+        * координат
+        */
+        function getPlaces() {var request = {}; 
+                              fetch("/places?" 
+                                    + new URLSearchParams(mymap.getCenter())
+                                   ).then(function(res) {
+                                  res.json().then(function(data) {
+                                                layer.addData(data);})
+                              });}
+
+        /*
+        * Загружаем комметарии при навигации по карте
+        */
+        var timerId = null
+        
+        function onMapMove(e) {
+            document.getElementById("centerid")
+                                .innerHTML = "Center: " 
+                                + mymap.getCenter();
+                               if (timerId == null) {
+                                   timerId = setTimeout(function() {
+                                       getPlaces();
+                                       timerId = null }, 1000);}};
+
+        mymap.on('move', onMapMove);
+        document.getElementById("centerid").innerHTML = "Center: " 
+            + mymap.getCenter();
+        timerId = setTimeout(function() {
+            getPlaces();
+            timerId = null }, 1000);
+</script>
+
+    
+</body>
+</html>
